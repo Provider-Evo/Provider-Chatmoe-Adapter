@@ -1,0 +1,25 @@
+{
+  "manifest_version": 2,
+  "id": "nichengfuben.provider-chatmoe-adapter",
+  "name": "Provider Chatmoe Adapter",
+  "version": "1.0.0",
+  "description": "chatmoe platform adapter plugin",
+  "plugin_type": "platform",
+  "author": {
+    "name": "nichengfuben"
+  },
+  "host_application": {
+    "min_version": "2.2.0-alpha",
+    "max_version": "2.2.99"
+  },
+  "sdk": {
+    "min_version": "0.3.0",
+    "max_version": "0.99.99"
+  },
+  "dependencies": [
+    "nichengfuben.provider-fncall-util"
+  ],
+  "capabilities": [
+    "platform.adapter"
+  ]
+}
