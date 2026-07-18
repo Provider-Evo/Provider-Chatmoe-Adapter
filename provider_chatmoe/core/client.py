@@ -8,15 +8,18 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 import aiohttp
 
-from src.core.dispatch.candidate import Candidate, make_id
+from src.core.dispatch.cand import Candidate, make_id
 from src.foundation.logger import get_logger
+from .helpers.client_helpers import (
+    abort_stream_request,
+    parse_sse_stream,
+    resume_stream_request,
+)
 from .constants import (
-    ABORT_PATH, BASE_URL, CHAT_PATH, CONTEXT_LENGTH,
-    KEY_REFRESH_INTERVAL, RESUME_PATH,
+    BASE_URL, CHAT_PATH, CONTEXT_LENGTH, KEY_REFRESH_INTERVAL,
 )
 from .headers import build_headers
 from .payloads import build_payload
-from .sse import parse_sse_line
 
 logger = get_logger(__name__)
 MAX_RETRIES: int = 3
@@ -30,6 +33,8 @@ class ChatmoeClient:
     - 流式 SSE 含 event/id/data 行解析
     - 支持 abort（停止生成）和 resume（继续生成）
     - 定时重新生成 Key（类似 qwen 定时登录）
+
+    SSE 解析与 abort/resume 请求构造拆分至 ``client_helpers.py``。
     """
 
     def __init__(self) -> None:
@@ -147,6 +152,25 @@ class ChatmoeClient:
         if last_exc is not None:
             raise last_exc
 
+    async def _consume_chat_response(
+        self,
+        resp: aiohttp.ClientResponse,
+        candidate: Candidate,
+        stream: bool,
+    ) -> AsyncGenerator[Union[str, Dict[str, Any]], None]:
+        """解析聊天响应体（流式或非流式）。"""
+        if stream:
+            async for chunk in parse_sse_stream(
+                resp, candidate.id, self._stream_offsets
+            ):
+                yield chunk
+        else:
+            obj = await resp.json()
+            content_val: str = obj["choices"][0]["message"]["content"]
+            yield content_val
+            if obj.get("usage"):
+                yield {"usage": obj["usage"]}
+
     async def _do_request(
         self,
         candidate: Candidate,
@@ -187,96 +211,11 @@ class ChatmoeClient:
                 self._active_streams[candidate.id] = stream_id
                 self._stream_offsets[candidate.id] = 0
 
-            if stream:
-                async for chunk in self._parse_sse_stream(
-                    resp, candidate, stream_id
-                ):
-                    yield chunk
-            else:
-                obj = await resp.json()
-                content_val: str = obj["choices"][0]["message"]["content"]
-                yield content_val
-                if obj.get("usage"):
-                    yield {"usage": obj["usage"]}
+            async for chunk in self._consume_chat_response(resp, candidate, stream):
+                yield chunk
 
             # 流结束后清理活跃标记
             self._active_streams.pop(candidate.id, None)
-
-    async def _parse_sse_stream(
-        self,
-        resp: Any,
-        candidate: Candidate,
-        stream_id: str,
-    ) -> AsyncGenerator[Union[str, Dict[str, Any]], None]:
-        """解析 SSE 流，处理 event/data/id 行。"""
-        buffer = ""
-        thinking_started = False
-        thinking_ended = False
-
-        async for raw in resp.content:
-            if not raw:
-                continue
-            buffer += raw.decode("utf-8", errors="replace")
-
-            while "\n\n" in buffer:
-                event_block, buffer = buffer.split("\n\n", 1)
-                lines = event_block.split("\n")
-
-                chunk_id = 0
-                data_parts = []
-                for line in lines:
-                    if line.startswith("id:"):
-                        try:
-                            chunk_id = int(line[3:].strip())
-                        except ValueError:
-                            pass
-                    elif line.startswith("data:"):
-                        data_parts.append(line[5:].strip())
-
-                if not data_parts:
-                    continue
-
-                data_str = "\n".join(data_parts).strip()
-                if data_str == "[DONE]":
-                    return
-
-                # 更新 offset
-                if chunk_id > 0:
-                    self._stream_offsets[candidate.id] = chunk_id
-
-                data = parse_sse_line(data_str)
-                if data is None or not isinstance(data, dict):
-                    continue
-
-                choices = data.get("choices", [])
-                if not choices:
-                    if data.get("usage"):
-                        yield {"usage": data["usage"]}
-                    continue
-
-                delta = choices[0].get("delta", {})
-                reasoning_content: Optional[str] = delta.get("reasoning_content")
-                content: Optional[str] = delta.get("content")
-
-                if reasoning_content:
-                    if not thinking_started:
-                        yield {"thinking": "<think>"}
-                        thinking_started = True
-                    yield {"thinking": reasoning_content}
-
-                if content:
-                    if thinking_started and not thinking_ended:
-                        yield {"thinking": "</think>\n\n"}
-                        thinking_ended = True
-                    yield content
-
-                if choices[0].get("finish_reason"):
-                    if thinking_started and not thinking_ended:
-                        yield {"thinking": "</think>\n\n"}
-                    return
-
-                if data.get("usage"):
-                    yield {"usage": data["usage"]}
 
     # =========================================================================
     # Abort / Resume
@@ -296,25 +235,11 @@ class ChatmoeClient:
             return False
 
         token: str = candidate.meta.get("api_key", "")
-        headers = build_headers(token)
-        url = "{}{}".format(BASE_URL, ABORT_PATH)
-
-        try:
-            async with self._session.post(
-                url,
-                json={"streamId": stream_id},
-                headers=headers,
-                ssl=False,
-                timeout=aiohttp.ClientTimeout(connect=5, total=15),
-            ) as resp:
-                ok = resp.status in (200, 204)
-                if ok:
-                    self._active_streams.pop(candidate.id, None)
-                    self._stream_offsets.pop(candidate.id, None)
-                return ok
-        except Exception as e:
-            logger.warning("chatmoe abort 失败: %s", e)
-            return False
+        ok = await abort_stream_request(self._session, token, stream_id)
+        if ok:
+            self._active_streams.pop(candidate.id, None)
+            self._stream_offsets.pop(candidate.id, None)
+        return ok
 
     async def resume_stream(
         self,
@@ -334,17 +259,12 @@ class ChatmoeClient:
             return
 
         token: str = candidate.meta.get("api_key", "")
-        headers = build_headers(token)
-        url = "{}{}".format(BASE_URL, RESUME_PATH)
 
         try:
-            async with self._session.post(
-                url,
-                json={"streamId": stream_id, "offset": offset},
-                headers=headers,
-                ssl=False,
-                timeout=aiohttp.ClientTimeout(connect=10, total=300),
-            ) as resp:
+            resp_cm = await resume_stream_request(
+                self._session, token, stream_id, offset
+            )
+            async with resp_cm as resp:
                 if resp.status != 200:
                     logger.warning("chatmoe resume HTTP %d", resp.status)
                     return
@@ -353,8 +273,8 @@ class ChatmoeClient:
                 new_sid = resp.headers.get("X-Stream-Id", stream_id)
                 self._active_streams[candidate.id] = new_sid
 
-                async for chunk in self._parse_sse_stream(
-                    resp, candidate, new_sid
+                async for chunk in parse_sse_stream(
+                    resp, candidate.id, self._stream_offsets
                 ):
                     yield chunk
         except Exception as e:

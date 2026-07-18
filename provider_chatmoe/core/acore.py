@@ -7,7 +7,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 import aiohttp
 
-from src.core.dispatch.candidate import Candidate
+from src.core.dispatch.cand import Candidate
 from src.core.utils.compat.models_cache import ModelsCache
 from src.foundation.logger import get_logger
 from provider_sdk.extensions.platform.adapter import PlatformAdapter

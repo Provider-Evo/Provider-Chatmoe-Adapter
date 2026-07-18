@@ -9,7 +9,7 @@
     "name": "nichengfuben"
   },
   "host_application": {
-    "min_version": "2.2.0-alpha",
+    "min_version": "2.2.270",
     "max_version": "2.2.99"
   },
   "sdk": {
