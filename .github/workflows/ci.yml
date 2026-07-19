@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          if [ -f pyproject.toml ] || [ -f setup.py ]; then
+            pip install -e .
+          fi
+
+      - name: Run tests
+        run: |
+          if [ -d tests ]; then
+            python -m pytest tests/ -v
+          else
+            python -c "import plugin; assert hasattr(plugin, 'create_plugin')"
+          fi
