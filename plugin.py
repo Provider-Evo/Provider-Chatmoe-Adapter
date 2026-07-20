@@ -1,11 +1,3 @@
-"""plugin 模块 — Provider 适配器层。
-
-职责：
-    作为 Provider-Evo 项目标准模块，提供 plugin 能力。
-
-本文件为 Provider-Evo 项目标准模块；保持单文件 200-400 行。
-修改指引参见文件末尾的"本模块对外契约"章节（共 20 条）。
-"""
 
 
 import importlib
@@ -29,7 +21,7 @@ def _find_adapter_class(mod: object) -> type:
 
 class ChatmoePlugin(ProviderPlugin):
     async def on_load(self) -> None:
-        mod = importlib.import_module("provider_chatmoe.core.adaptercore")
+        mod = importlib.import_module("provider_chatmoe.core.acore")
         adapter = _find_adapter_class(mod)()
         attach_platform_adapter(self, adapter)
 

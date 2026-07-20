@@ -13,7 +13,7 @@
     "max_version": "2.2.99"
   },
   "sdk": {
-    "min_version": "0.3.0",
+    "min_version": "0.3.3",
     "max_version": "0.99.99"
   },
   "dependencies": [

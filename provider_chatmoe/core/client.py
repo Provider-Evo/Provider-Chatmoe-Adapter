@@ -15,11 +15,11 @@ from .helpers.client_helpers import (
     parse_sse_stream,
     resume_stream_request,
 )
-from .constants import (
+from .consts import (
     BASE_URL, CHAT_PATH, CONTEXT_LENGTH, KEY_REFRESH_INTERVAL,
 )
 from .headers import build_headers
-from .payloads import build_payload
+from .payload import build_payload
 
 logger = get_logger(__name__)
 MAX_RETRIES: int = 3
@@ -68,7 +68,7 @@ class ChatmoeClient:
 
     def _rebuild_candidates(self) -> None:
         """根据当前凭证重建候选项列表。"""
-        from .constants import CAPS  # noqa: PLC0415
+        from .consts import CAPS  # noqa: PLC0415
 
         self._candidates = [
             Candidate(

@@ -12,7 +12,7 @@ from src.core.utils.compat.models_cache import ModelsCache
 from src.foundation.logger import get_logger
 from provider_sdk.extensions.platform.adapter import PlatformAdapter
 from .client import ChatmoeClient
-from .constants import (
+from .consts import (
     CAPS,
     FETCH_MODELS_ENABLED,
     MODEL_FETCH_INTERVAL,

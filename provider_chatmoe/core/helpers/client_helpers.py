@@ -13,7 +13,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
 import aiohttp
 
 from src.foundation.logger import get_logger
-from ..constants import ABORT_PATH, BASE_URL, RESUME_PATH
+from ..consts import ABORT_PATH, BASE_URL, RESUME_PATH
 from ..headers import build_headers
 from .sse import parse_sse_line
 
