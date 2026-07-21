@@ -1,4 +1,21 @@
 {
   "type": "object",
-  "properties": {}
+  "properties": {
+    "api_keys": {
+      "type": "array",
+      "title": "API Keys",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Chatmoe 平台 API 密钥；accounts.py 非空时优先"
+    },
+    "use_proxy": {
+      "type": "boolean",
+      "title": "Use Proxy",
+      "default": true,
+      "description": "启用时允许本平台使用主配置 [proxy] 中的全局代理"
+    }
+  },
+  "required": []
 }

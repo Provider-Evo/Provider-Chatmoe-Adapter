@@ -1,7 +1,10 @@
-"""ChatMoe HTTP 客户端"""
-
 from __future__ import annotations
 
+from pathlib import Path
+
+from src.foundation.config.reader import load_plugin_api_keys
+
+_PLUGIN_DIR = Path(__file__).resolve().parents[2]
 import asyncio
 import uuid as _uuid
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
