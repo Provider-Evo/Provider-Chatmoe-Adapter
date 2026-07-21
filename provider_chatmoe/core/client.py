@@ -7,6 +7,8 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 import aiohttp
 
+from provider_sdk.model_ids import ModelIdRegistry
+
 from src.core.dispatch.cand import Candidate, make_id
 from src.foundation.config.reader import load_plugin_api_keys
 from src.foundation.logger import get_logger
@@ -16,7 +18,7 @@ from .helpers.client_helpers import (
     resume_stream_request,
 )
 from .consts import (
-    BASE_URL, CHAT_PATH, CONTEXT_LENGTH, KEY_REFRESH_INTERVAL,
+    BASE_URL, CHAT_PATH, CONTEXT_LENGTH, KEY_REFRESH_INTERVAL, MODELS,
 )
 from .headers import build_headers
 from .payload import build_payload
@@ -41,7 +43,9 @@ class ChatmoeClient:
 
     def __init__(self) -> None:
         self._session: Any = None
-        self._models: List[str] = []
+        self._model_registry = ModelIdRegistry("chatmoe")
+        self._model_registry.load()
+        self._models: List[str] = self._model_registry.merge_fallback(MODELS)
         self._candidates: List[Candidate] = []
         # candidate.id -> stream_id（当前活跃流）
         self._active_streams: Dict[str, str] = {}
@@ -64,9 +68,9 @@ class ChatmoeClient:
 
     def update_models(self, models: List[str]) -> None:
         """更新模型列表。"""
-        self._models = list(models)
+        self._models = self._model_registry.register_many(models)
         for cand in self._candidates:
-            cand.models = list(models)
+            cand.models = list(self._models)
 
     def _rebuild_candidates(self) -> None:
         """根据当前凭证重建候选项列表。"""
@@ -135,6 +139,7 @@ class ChatmoeClient:
         **kw: Any,
     ) -> AsyncGenerator[Union[str, Dict[str, Any]], None]:
         """执行聊天补全，含指数退避重试。"""
+        model = self._model_registry.resolve_upstream(model)
         last_exc: Optional[Exception] = None
         for attempt in range(MAX_RETRIES + 1):
             if attempt > 0:
