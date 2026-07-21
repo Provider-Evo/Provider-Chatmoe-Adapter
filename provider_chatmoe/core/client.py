@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-from pathlib import Path
-
-from src.foundation.config.reader import load_plugin_api_keys
-
-_PLUGIN_DIR = Path(__file__).resolve().parents[2]
 import asyncio
 import uuid as _uuid
+from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 import aiohttp
 
 from src.core.dispatch.cand import Candidate, make_id
+from src.foundation.config.reader import load_plugin_api_keys
 from src.foundation.logger import get_logger
 from .helpers.client_helpers import (
     abort_stream_request,
@@ -23,6 +20,8 @@ from .consts import (
 )
 from .headers import build_headers
 from .payload import build_payload
+
+_PLUGIN_DIR = Path(__file__).resolve().parents[2]
 
 logger = get_logger(__name__)
 MAX_RETRIES: int = 3
